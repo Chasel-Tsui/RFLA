@@ -7,8 +7,8 @@ from .builder import IOU_CALCULATORS
 @IOU_CALCULATORS.register_module()
 class BboxDistanceMetric(object):
     """2D Overlaps (e.g. IoUs, GIoUs) Calculator."""
-    def __init__(self, constant=12.7):
-        self.constant = constant
+    def __init__(self, dtype=None):
+        self.dtype = dtype
 
     def __call__(self, bboxes1, bboxes2, mode='iou', is_aligned=False):
         """Calculate IoU between 2D bboxes.
@@ -35,7 +35,7 @@ class BboxDistanceMetric(object):
             bboxes2 = bboxes2[..., :4]
         if bboxes1.size(-1) == 5:
             bboxes1 = bboxes1[..., :4]
-        return bbox_overlaps(bboxes1, bboxes2, mode, is_aligned, constant=self.constant)
+        return bbox_overlaps(bboxes1, bboxes2, mode, is_aligned)
 
     def __repr__(self):
         """str: a string describing the module"""
@@ -43,9 +43,8 @@ class BboxDistanceMetric(object):
         return repr_str
 
 
-def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6, constant=12.7, weight=2):
-    assert mode in ['iou', 'iof', 'giou', 'normalized_giou', 'ciou', 'diou', 'nwd',
-                    'dotd'], f'Unsupported mode {mode}'
+def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6):
+    assert mode in ['iou', 'iof', 'giou', 'wd','kld'], f'Unsupported mode {mode}'
     # Either the boxes are empty or the length of boxes's last dimenstion is 4
     assert (bboxes1.size(-1) == 4 or bboxes1.size(0) == 0)
     assert (bboxes2.size(-1) == 4 or bboxes2.size(0) == 0)
@@ -77,7 +76,7 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6, cons
 
     union = area1[..., None] + area2[..., None, :] - overlap + eps
 
-    if mode in ['giou', 'normalized_giou', 'ciou', 'diou']:
+    if mode in ['giou']:
         enclosed_lt = torch.min(bboxes1[..., :, None, :2],
                                 bboxes2[..., None, :, :2])
         enclosed_rb = torch.max(bboxes1[..., :, None, 2:],
@@ -92,7 +91,7 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6, cons
 
 
     # calculate gious
-    if mode in ['giou', 'normalized_giou', 'ciou', 'diou']:
+    if mode in ['giou']:
         enclose_wh = (enclosed_rb - enclosed_lt).clamp(min=0)
         enclose_area = enclose_wh[..., 0] * enclose_wh[..., 1]
         enclose_area = torch.max(enclose_area, eps)
@@ -101,55 +100,8 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6, cons
     if mode == 'giou':
         return gious
 
-    if mode == 'normalized_giou':
-        gious = (1 + gious) / 2
 
-        return gious
-
-    if mode == 'diou':
-        center1 = (bboxes1[..., :, None, :2] + bboxes1[..., :, None, 2:]) / 2
-        center2 = (bboxes2[..., None, :, :2] + bboxes2[..., None, :, 2:]) / 2
-        whs = center1[..., :2] - center2[..., :2]
-
-        center_distance = whs[..., 0] * whs[..., 0] + whs[..., 1] * whs[
-            ..., 1] + eps  # distances of center points between gt and pre
-
-        enclosed_diagonal_distances = enclose_wh[..., 0] * enclose_wh[..., 0] + enclose_wh[..., 1] * enclose_wh[
-            ..., 1]  # distances of diagonal of enclosed bbox
-
-        dious = ious - center_distance / torch.max(enclosed_diagonal_distances, eps)
-
-        dious = torch.clamp(dious, min=-1.0, max=1.0)
-
-        return dious
-
-    if mode == 'ciou':
-        center1 = (bboxes1[..., :, None, :2] + bboxes1[..., :, None, 2:]) / 2
-        center2 = (bboxes2[..., None, :, :2] + bboxes2[..., None, :, 2:]) / 2
-        whs = center1[..., :2] - center2[..., :2]
-
-        center_distance = whs[..., 0] * whs[..., 0] + whs[..., 1] * whs[
-            ..., 1] + eps  # distances of center points between gt and pre
-
-        enclosed_diagonal_distances = enclose_wh[..., 0] * enclose_wh[..., 0] + enclose_wh[..., 1] * enclose_wh[
-            ..., 1]  # distances of diagonal of enclosed bbox
-
-        w1 = bboxes1[..., :, None, 2] - bboxes1[..., :, None, 0] + eps
-        h1 = bboxes1[..., :, None, 3] - bboxes1[..., :, None, 1] + eps
-        w2 = bboxes2[..., None, :, 2] - bboxes2[..., None, :, 0] + eps
-        h2 = bboxes2[..., None, :, 3] - bboxes2[..., None, :, 1] + eps
-
-        factor = 4 / math.pi ** 2
-        v = factor * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
-
-        cious = ious - (center_distance / torch.max(enclosed_diagonal_distances, eps) + v ** 2 / torch.max(1 - ious + v,
-                                                                                                           eps))
-
-        cious = torch.clamp(cious, min=-1.0, max=1.0)
-
-        return cious
-
-    if mode == 'nwd':
+    if mode == 'wd':
         center1 = (bboxes1[..., :, None, :2] + bboxes1[..., :, None, 2:]) / 2
         center2 = (bboxes2[..., None, :, :2] + bboxes2[..., None, :, 2:]) / 2
         whs = center1[..., :2] - center2[..., :2]
@@ -161,23 +113,27 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6, cons
         w2 = bboxes2[..., None, :, 2] - bboxes2[..., None, :, 0] + eps
         h2 = bboxes2[..., None, :, 3] - bboxes2[..., None, :, 1] + eps
 
-        wh_distance = ((w1 - w2) ** 2 + (h1 - h2) ** 2) / (weight ** 2)
+        wh_distance = ((w1 - w2) ** 2 + (h1 - h2) ** 2) / 4
+        wasserstein = center_distance + wh_distance
 
-        wassersteins = torch.sqrt(center_distance + wh_distance)
+        wd = 1/(1+wasserstein)
 
-        normalized_wasserstein = torch.exp(-wassersteins / constant)
+        return wd
 
-        return normalized_wasserstein
-
-    if mode == 'dotd':
+    if mode == 'kld':
         center1 = (bboxes1[..., :, None, :2] + bboxes1[..., :, None, 2:]) / 2
         center2 = (bboxes2[..., None, :, :2] + bboxes2[..., None, :, 2:]) / 2
         whs = center1[..., :2] - center2[..., :2]
 
-        center_distance = whs[..., 0] * whs[..., 0] + whs[..., 1] * whs[..., 1] + eps  #
+        w1 = bboxes1[..., :, None, 2] - bboxes1[..., :, None, 0] + eps
+        h1 = bboxes1[..., :, None, 3] - bboxes1[..., :, None, 1] + eps
+        w2 = bboxes2[..., None, :, 2] - bboxes2[..., None, :, 0] + eps
+        h2 = bboxes2[..., None, :, 3] - bboxes2[..., None, :, 1] + eps
 
-        distance = torch.sqrt(center_distance)
+        kl=(w2**2/w1**2+h2**2/h1**2+4*whs[..., 0]**2/w1**2+4*whs[..., 1]**2/h1**2+torch.log(w1**2/w2**2)+torch.log(h1**2/h2**2)-2)/2
 
-        dotd = torch.exp(-distance / constant)
+        kld = 1/(1+kl)
 
-        return dotd
+        return kld
+
+

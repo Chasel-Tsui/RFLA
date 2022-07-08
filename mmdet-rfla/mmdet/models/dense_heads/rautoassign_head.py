@@ -122,7 +122,7 @@ class CenterPrior(nn.Module):
 
 
 @HEADS.register_module()
-class RAutoAssignHead(FCOSHead):
+class RFLA_AutoAssignHead(FCOSHead):
     """AutoAssignHead head used in `AutoAssign.
 
     <https://arxiv.org/abs/2007.03496>`_.
@@ -171,7 +171,7 @@ class RAutoAssignHead(FCOSHead):
         regression conv's bias
         """
 
-        super(RAutoAssignHead, self).init_weights()
+        super(RFLA_AutoAssignHead, self).init_weights()
         bias_cls = bias_init_with_prob(0.02)
         normal_init(self.conv_cls, std=0.01, bias=bias_cls)
         normal_init(self.conv_reg, std=0.01, bias=4.0)
@@ -472,7 +472,7 @@ class RAutoAssignHead(FCOSHead):
         rfields = []
         for num in range(len(points)):
             rfield=[]
-            # v3
+            # receptive field as prior information
             if self.fpn_layer == 'p3':
                 rfnum = num + 1
 

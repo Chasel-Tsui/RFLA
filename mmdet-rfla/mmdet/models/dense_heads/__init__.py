@@ -39,8 +39,8 @@ from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
 from .yolo_head import YOLOV3Head
 from .yolof_head import YOLOFHead
 from .yolox_head import YOLOXHead
-from .rfcos_head import RFCOSHead
-from .rautoassign_head import RAutoAssignHead
+from .rfcos_head import RFLA_FCOSHead
+from .rautoassign_head import RFLA_AutoAssignHead
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -54,5 +54,5 @@ __all__ = [
     'AutoAssignHead', 'DETRHead', 'YOLOFHead', 'DeformableDETRHead',
     'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 'LADHead', 'TOODHead', 'MaskFormerHead',
-    'Mask2FormerHead', 'RFCOSHead', 'RAutoAssignHead'
+    'Mask2FormerHead', 'RFLA_FCOSHead', 'RFLA_AutoAssignHead'
 ]
